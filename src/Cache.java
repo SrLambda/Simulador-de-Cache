@@ -2,17 +2,17 @@ import java.util.ArrayList;
 
 public class Cache {
 
-    private int tamBloque;
-    private int tamCache;
-    private int tamGrupo;
-    private int tamLinea;
+    private final int tamBloque;
+    private final int tamCache;
+    private final int tamGrupo;
+    private final int tamLinea;
+    private final int cantGrupos;
 
     private boolean write_allocate;
     private boolean write_through;
 
-    private ArrayList direccionesDatos;
-    private ArrayList direccionesInstrucciones;
-    private ArrayList orden_de_usos;
+    private final ArrayList<GrupoLineasCache> direccionesDatos;
+    private final ArrayList<GrupoLineasCache> direccionesInstrucciones;
 
     private int num_ref_instrucciones;
     private int num_ref_datos;
@@ -34,16 +34,20 @@ public class Cache {
                              // (Con esto se decide si es DirectMap., FullyAsso. o SetAsso.)
 
 
+        this.cantGrupos = (this.tamCache/this.tamGrupo);
+
         if(split)
         {
-        
-            this.direccionesDatos = new ArrayList<Direccion>();
-            this.direccionesInstrucciones = new ArrayList<Direccion>();
 
-            for(int i=0; i < (this.tamCache/2) ; i++)
+            // ----   CREA LA CACHE CON SPLIT   ----
+
+            this.direccionesDatos = new ArrayList<GrupoLineasCache>();
+            this.direccionesInstrucciones = new ArrayList<GrupoLineasCache>();
+
+            for(int i=0; i < (this.cantGrupos / 2) ; i++)
             {
-                this.direccionesDatos.add(new Direccion());
-                this.direccionesInstrucciones.add(new Direccion());
+                this.direccionesDatos.add(new GrupoLineasCache(this.tamGrupo));
+                this.direccionesInstrucciones.add(new GrupoLineasCache(this.tamGrupo));
 
             }
 
@@ -51,12 +55,14 @@ public class Cache {
         else
         {
 
-            this.direccionesDatos = new ArrayList<Direccion>();
+            // ----   CREA LA CACHE SIN SPLIT   ----
+
+            this.direccionesDatos = new ArrayList<GrupoLineasCache>();
             this.direccionesInstrucciones = this.direccionesDatos;
 
-            for(int i=0; i < (this.tamCache) ; i++)
+            for(int i=0; i < (this.cantGrupos) ; i++)
             {
-                this.direccionesDatos.add(new Direccion());
+                this.direccionesDatos.add(new GrupoLineasCache(this.tamGrupo));
 
             }
 
@@ -73,37 +79,255 @@ public class Cache {
 
     }
 
+
+    public void impFin()
+    {
+
+    }
+
+
     public void accion(int accion,String direccion)
     {
 
-        int linea = this.makeLine(direccion);
-        int   tag = this.makeTag(direccion);
+        int grupo = this.obtenerGrupo(direccion);
+        int   tag = this.obtenerTag(direccion);
 
-        
+
+
+        Linea linea;  // Linea de cache que se quiere utilizar
+
+
+
         switch(accion)
         {
 
             case 0:  // leer dato
 
+
+                // Busca el tag
+                linea = this.buscarDireccion(grupo,tag,false);
+
+
+
+                if(linea == null) // MISS
+                {
+
+
+                    this.num_fal_datos++;
+                    this.lecturas_ram++;
+                    this.tiempo += 100;
+
+
+                    // Agregar en caché
+                    linea = this.direccionesDatos.get(grupo).agregarLinea(tag);
+
+
+
+                    // No hay espacio en Caché
+                    if(linea == null)
+                    {
+
+                        // Elimina una linea
+                        linea = this.direccionesDatos.get(grupo).eliminarLinea();
+
+
+                        // Write-Back
+                        if(!this.write_through && linea.esDirty())
+                        {
+                            this.escritura_ram++;
+                            this.tiempo += 100;
+                        }
+
+
+                        // Agregar en caché
+                        this.direccionesDatos.get(grupo).agregarLinea(tag);
+
+                    }
+
+
+                }
+
+
+                this.num_ref_datos++; //  HIT
+                this.tiempo += 5;     //  TIEMPO
+
                 break;
 
             case 1:  // escribir dato
+
+
+                // Busca el tag
+                linea = this.buscarDireccion(grupo,tag,false);
+
+
+
+                // MISS
+                if(linea == null)
+                {
+
+                    this.num_fal_datos++;
+                    this.lecturas_ram++;
+                    this.tiempo += 100;
+
+
+                    if(this.write_allocate)
+                    {
+
+                        // WRITE ALLOCATE
+
+                        this.escritura_ram++;
+                        this.tiempo += 100;
+
+                    }
+                    else
+                    {
+
+                        // WRITE NO ALLOCATE
+
+
+
+                        // Agregar en caché
+                        linea = this.direccionesDatos.get(grupo).agregarLinea(tag);
+
+
+
+                        // No hay espacio en Caché
+                        if(linea == null)
+                        {
+
+                            // Elimina una linea
+                            linea = this.direccionesDatos.get(grupo).eliminarLinea();
+
+
+                            // Write-Back
+                            if(!this.write_through && linea.esDirty())
+                            {
+                                this.escritura_ram++;
+                                this.tiempo += 100;
+                            }
+
+
+                            // Agregar en caché
+                            this.direccionesDatos.get(grupo).agregarLinea(tag);
+
+
+                        }
+
+                    }
+                }
+
+
+
+                if(this.write_through && !this.write_allocate) // Evitar escribir 2 veces
+                {
+                    // Escribe a Ram
+
+                    this.escritura_ram++;
+                    this.tiempo += 100;
+
+                }
+                else if (linea != null)
+                {
+                    // Se marca Dirty
+
+                    linea.escritura();
+
+
+                    //  HIT
+                    this.num_ref_datos++;
+                    this.tiempo += 5;
+
+                }
 
                 break;
 
             case 2:  // leer instrucción
 
+
+                // Busca el tag
+                linea = this.buscarDireccion(grupo,tag,true);
+
+
+                // MISS
+                if(linea == null)
+                {
+
+                    this.num_fal_instrucciones++;
+                    this.lecturas_ram++;
+                    this.tiempo += 100;
+
+
+                    // Agregar en caché
+                    linea = this.direccionesInstrucciones.get(grupo).agregarLinea(tag);
+
+
+                    // No hay espacio en Caché
+                    if(linea == null)
+                    {
+
+                        // Elimina una linea
+                        linea = this.direccionesInstrucciones.get(grupo).eliminarLinea();
+
+
+                        // Write-Back
+                        if(!this.write_through && linea.esDirty())
+                        {
+                            this.escritura_ram++;
+                            this.tiempo += 100;
+                        }
+
+
+                        // Agregar en caché
+                        this.direccionesInstrucciones.get(grupo).agregarLinea(tag);
+
+                    }
+
+                }
+
+
+                //  HIT
+                this.num_ref_instrucciones++;
+                this.tiempo += 5;
+
+
                 break;
         }
     }
 
-    private int makeTag(String direccion){
+    // Buscar direccion
+
+    private Linea buscarDireccion( int grupo , int tag , boolean esInstruccion)
+    {
+
+        Linea linea;
+
+        if(esInstruccion)
+        {
+            linea = this.direccionesInstrucciones.get(grupo).buscarLinea(tag);
+        }
+        else
+        {
+            linea = this.direccionesDatos.get(grupo).buscarLinea(tag);
+        }
+
+        return linea;
+    }
+
+
+
+
+
+
+    // Funciones para descomponer direcciones
+
+    private int obtenerTag(String direccion){
 
         StringBuilder tag = new StringBuilder();
 
         int fin = direccion.length() - 1 - this.tamBloque - this.tamLinea ; 
 
-        for (int index = 0; index < fin; index++) {
+        for (int index = 0; index < fin; index++)
+        {
 
             tag.append(direccion.charAt(index));
             
@@ -112,24 +336,25 @@ public class Cache {
         return ConversorNumerico.deBinADec(tag.toString());
     }
 
-    private int makeLine(String direccion){
+    private int obtenerGrupo(String direccion){
 
         StringBuilder line = new StringBuilder();
 
         int inicio = direccion.length() - 1 - this.tamBloque - this.tamLinea ;
         int fin    = direccion.length() - 1 - this.tamBloque;
 
-        for (int index = inicio; index < fin; index++) {
+        for (int index = inicio; index < fin; index++)
+        {
 
             line.append(direccion.charAt(index));
             
         }
 
-        return ConversorNumerico.deBinADec(line.toString());
+        int dirMemoriaPrincipal = ConversorNumerico.deBinADec(line.toString());
+
+        return (dirMemoriaPrincipal % this.cantGrupos);
     }
 
-    public void impFin(){
 
-    }
     
 }

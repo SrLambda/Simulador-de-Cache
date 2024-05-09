@@ -1,9 +1,9 @@
-public class Direccion {
+public class Linea {
     
     private int tag;
     private boolean dirty;
 
-    Direccion(){
+    Linea(){
 
         this.tag = -1;
         this.dirty = false;
@@ -19,6 +19,8 @@ public class Direccion {
         }
     }
 
+
+
     public void reemplazarTag(int nuevo_tag){
 
         if(this.dirty)
@@ -30,7 +32,13 @@ public class Direccion {
     }
 
 
-    public int getTag(){
-        return tag;
+    public int getTag()
+    {
+        return this.tag;
+    }
+
+    public boolean esDirty()
+    {
+        return this.dirty;
     }
 }

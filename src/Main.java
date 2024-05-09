@@ -8,8 +8,7 @@ public class Main {
 
         int tamCache  =  256;
         int tamBloque =  2;
-        int tipocache = -1;
-        int cantGrupo =  1;
+        int tamGrupo  =  1;
 
         boolean writeThrough  = false;
         boolean writeAllocate = true;
@@ -30,7 +29,6 @@ public class Main {
                     case "-cs":
 
                         tamCache  = Integer.parseInt(args[i + 1]);
-                        cantGrupo = 1;
                         break;
 
                     case "-wt":
@@ -40,25 +38,14 @@ public class Main {
 
                     case "-fa":
 
-                        if(tipocache==-1)
-                        {
-
-                            tipocache = 0;
-                            cantGrupo = tamCache;
-
-                        }
+                        tamGrupo = tamCache;
 
                         break;
 
                     case "-sa":
 
-                        if(tipocache==-1)
-                        {
+                        tamGrupo = Integer.parseInt(args[i + 1]);
 
-                            tipocache = 1;
-                            cantGrupo = Integer.parseInt(args[i + 1]);
-
-                        }
 
                         break;
 
@@ -92,7 +79,7 @@ public class Main {
         }
 
 
-        Cache cache = new Cache(tamBloque, tipocache, cantGrupo, writeAllocate, writeThrough , split);
+        Cache cache = new Cache(tamBloque, tamCache, tamGrupo, writeAllocate, writeThrough , split);
 
 
         String archivoPath = args[args.length-1];
