@@ -3,13 +3,11 @@ import java.util.ArrayList;
 public class Cache {
 
     private final int tamBloque;
-    private final int tamCache;
-    private final int tamGrupo;
     private final int tamLinea;
     private final int cantGrupos;
 
-    private boolean write_allocate;
-    private boolean write_through;
+    private final boolean write_allocate;
+    private final boolean write_through;
 
     private final ArrayList<GrupoLineasCache> direccionesDatos;
     private final ArrayList<GrupoLineasCache> direccionesInstrucciones;
@@ -24,30 +22,38 @@ public class Cache {
 
     Cache(int bs,int cs,int gs,boolean  wa,boolean wt,boolean split){
 
-        this.tamBloque = (int) ( Math.log(bs * 4) / Math.log(2) ); // Tamaño de bloque
+        this.tamBloque      = (int) ( Math.log(bs * 4) / Math.log(2) ); // Tamaño de bloque
 
-        this.tamLinea  = (int)     ( Math.log(gs) / Math.log(2) ); // Tamaño de linea
+        this.write_allocate = wa;
 
-        this.tamCache = cs;  // Tamaño de cache
+        this.write_through  = wt;
 
-        this.tamGrupo = gs;  // Tamaño de grupo 
-                             // (Con esto se decide si es DirectMap., FullyAsso. o SetAsso.)
-
-
-        this.cantGrupos = (this.tamCache/this.tamGrupo);
 
         if(split)
         {
 
-            // ----   CREA LA CACHE CON SPLIT   ----
+            // ----   CREA LA CACHE CON SPLIT   ---- //
 
-            this.direccionesDatos = new ArrayList<GrupoLineasCache>();
-            this.direccionesInstrucciones = new ArrayList<GrupoLineasCache>();
 
-            for(int i=0; i < (this.cantGrupos / 2) ; i++)
+            if( cs == gs)
             {
-                this.direccionesDatos.add(new GrupoLineasCache(this.tamGrupo));
-                this.direccionesInstrucciones.add(new GrupoLineasCache(this.tamGrupo));
+                this.cantGrupos = 1;
+            }
+            else
+            {
+                this.cantGrupos = (cs / gs) / 2;
+            }
+
+
+            this.tamLinea   = (int) ( Math.log( this.cantGrupos ) / Math.log(2) ); // Tamaño de linea
+
+            this.direccionesDatos = new ArrayList<>();
+            this.direccionesInstrucciones = new ArrayList<>();
+
+            for(int i=0; i < (this.cantGrupos) ; i++)
+            {
+                this.direccionesDatos.add(new GrupoLineasCache( gs ));
+                this.direccionesInstrucciones.add(new GrupoLineasCache( gs ));
 
             }
 
@@ -55,16 +61,20 @@ public class Cache {
         else
         {
 
-            // ----   CREA LA CACHE SIN SPLIT   ----
+            // ----   CREA LA CACHE SIN SPLIT   ---- //
 
-            this.direccionesDatos = new ArrayList<GrupoLineasCache>();
+            this.cantGrupos = (cs / gs);
+            this.tamLinea   = (int) ( Math.log( this.cantGrupos ) / Math.log(2) ); // Tamaño de linea
+
+            this.direccionesDatos = new ArrayList<>();
             this.direccionesInstrucciones = this.direccionesDatos;
 
             for(int i=0; i < (this.cantGrupos) ; i++)
             {
-                this.direccionesDatos.add(new GrupoLineasCache(this.tamGrupo));
+                this.direccionesDatos.add(new GrupoLineasCache( gs ));
 
             }
+
 
         }
 
@@ -82,6 +92,14 @@ public class Cache {
 
     public void impFin()
     {
+
+        System.out.println("Número de referencias a instrucciones: " + this.num_ref_instrucciones);
+        System.out.println("Número de referencias a datos: " + this.num_ref_datos);
+        System.out.println("Número de faltas de las instrucciones: " + this.num_fal_instrucciones);
+        System.out.println("Número de faltas de las datos: " + this.num_fal_datos);
+        System.out.println("Número de words copiados (Lecturas) desde memoria principal: " + this.lecturas_ram);
+        System.out.println("Número de words copiados (Escrituras) a memoria principal: " + this.escritura_ram);
+        System.out.println("Tiempo de ejecución: " + this.tiempo + " [ns]");
 
     }
 
@@ -108,8 +126,8 @@ public class Cache {
                 linea = this.buscarDireccion(grupo,tag,false);
 
 
-
-                if(linea == null) // MISS
+                // -- MISS -- //
+                if(linea == null)
                 {
 
 
@@ -148,8 +166,9 @@ public class Cache {
                 }
 
 
-                this.num_ref_datos++; //  HIT
-                this.tiempo += 5;     //  TIEMPO
+                //  -- HIT -- //
+                this.num_ref_datos++;
+                this.tiempo += 5;
 
                 break;
 
@@ -161,7 +180,7 @@ public class Cache {
 
 
 
-                // MISS
+                // -- MISS -- //
                 if(linea == null)
                 {
 
@@ -170,10 +189,10 @@ public class Cache {
                     this.tiempo += 100;
 
 
-                    if(this.write_allocate)
+                    if( !(this.write_allocate) )
                     {
 
-                        // WRITE ALLOCATE
+                        // WRITE NO ALLOCATE
 
                         this.escritura_ram++;
                         this.tiempo += 100;
@@ -182,7 +201,7 @@ public class Cache {
                     else
                     {
 
-                        // WRITE NO ALLOCATE
+                        // WRITE ALLOCATE
 
 
 
@@ -218,7 +237,7 @@ public class Cache {
 
 
 
-                if(this.write_through && !this.write_allocate) // Evitar escribir 2 veces
+                if(this.write_through)
                 {
                     // Escribe a Ram
 
@@ -232,12 +251,11 @@ public class Cache {
 
                     linea.escritura();
 
-
-                    //  HIT
-                    this.num_ref_datos++;
-                    this.tiempo += 5;
-
                 }
+
+                // -- HIT -- //
+                this.num_ref_datos++;
+                this.tiempo += 5;
 
                 break;
 
@@ -248,7 +266,7 @@ public class Cache {
                 linea = this.buscarDireccion(grupo,tag,true);
 
 
-                // MISS
+                // -- MISS -- //
                 if(linea == null)
                 {
 
@@ -285,7 +303,7 @@ public class Cache {
                 }
 
 
-                //  HIT
+                // -- HIT -- //
                 this.num_ref_instrucciones++;
                 this.tiempo += 5;
 
@@ -294,7 +312,9 @@ public class Cache {
         }
     }
 
-    // Buscar direccion
+
+
+
 
     private Linea buscarDireccion( int grupo , int tag , boolean esInstruccion)
     {
@@ -318,7 +338,7 @@ public class Cache {
 
 
 
-    // Funciones para descomponer direcciones
+    // -- Funciones para descomponer direcciones -- //
 
     private int obtenerTag(String direccion){
 
@@ -335,6 +355,10 @@ public class Cache {
 
         return ConversorNumerico.deBinADec(tag.toString());
     }
+
+
+
+
 
     private int obtenerGrupo(String direccion){
 
@@ -354,7 +378,5 @@ public class Cache {
 
         return (dirMemoriaPrincipal % this.cantGrupos);
     }
-
-
     
 }

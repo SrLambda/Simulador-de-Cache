@@ -43,6 +43,9 @@ public class GrupoLineasCache {
 
     }
 
+
+
+
     public Linea agregarLinea(int tag){
 
         for (Linea l: this.lineas) {
@@ -50,7 +53,7 @@ public class GrupoLineasCache {
             if(l.getTag() == -1) // Encuentra línea vacia
             {
                 l.reemplazarTag(tag);
-
+                this.usoLinea(l);
                 return l;
             }
 
@@ -58,6 +61,10 @@ public class GrupoLineasCache {
 
         return null; // Caché llena
     }
+
+
+
+
 
     public Linea eliminarLinea()
     {
@@ -83,33 +90,42 @@ public class GrupoLineasCache {
     }
 
 
+
+
+
     private void usoLinea(Linea linea)
     {
 
-        if(this.lineas.size() == this.ordenUso.size()) // La caché esta llena
+
+        int posibleIndice = this.lineaHaSidoUsada(linea);
+
+        if(posibleIndice != -1)
         {
 
-            int     index   = 0 ;
-            boolean bandera = true;  // Comprueba si se encontró la linea
-
-            do
-            {
-
-                if(this.ordenUso.get(index) == linea)
-                {
-
-                    this.ordenUso.remove(index);
-                    bandera = false;
-
-                }
-
-            }
-            while(bandera);
+            this.ordenUso.remove(posibleIndice);
 
         }
 
+
         this.ordenUso.add(linea);
 
+
+
+    }
+
+    private int lineaHaSidoUsada(Linea linea){
+
+        for (int i=0 ; i < this.ordenUso.size() ; i++)
+        {
+
+            if(this.ordenUso.get(i) == linea)
+            {
+                return i;
+            }
+
+        }
+
+        return -1;
     }
 
 
